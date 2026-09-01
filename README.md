@@ -21,8 +21,16 @@ cp config/openai_key.txt.example config/openai_key.txt   # 예시 복사
 - 컨테이너엔 `run_all.sh` 가 `-v config/openai_key.txt:/secrets/openai_key.txt:ro` 로 마운트한다.
 - 키 없으면 A·B만 뜬다(C 자동 건너뜀). 비용은 생성단계만(gpt-3.5 기준 몇 $). **하드 스펜딩 캡 권장.**
 
+## 요구 자원
+- **코어 6개 이상(cpuset 1~6) + RAM ~24~28GB(6컨테이너×4GB) + 디스크 수백 GB.**
+- docker · (Arm C는 OpenAI 유료키). 첫 빌드 20~40분(qemu 소스빌드).
+
 ## 실행
 ```bash
+# (권장) AFL 크래시 정확도용 — 호스트에서 한 번. core_pattern 이 '|'로 시작하면 AFL 이 abort:
+echo core | sudo tee /proc/sys/kernel/core_pattern
+#   안 해도 러너가 AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 로 돌긴 함(정확도만 약간↓)
+
 bash run_all.sh 60     # 60초 스모크 (빌드 + 6컨테이너)
 bash run_all.sh        # 6시간 본run (인자 없으면 21600)
 bash status.sh         # 6개 상태·CPU핀·경과·산출물수·로그 (watch -n5 bash status.sh)
