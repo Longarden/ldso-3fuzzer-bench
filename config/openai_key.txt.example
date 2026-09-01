@@ -1,0 +1,13 @@
+여기에 OpenAI API 키를 넣으세요 (이 파일은 예시입니다).
+
+기입 방법:
+  1) 이 파일을 config/openai_key.txt 로 복사:
+       cp config/openai_key.txt.example config/openai_key.txt
+  2) config/openai_key.txt 를 열어 아래 예시 텍스트를 지우고 '키 한 줄'만 남기세요:
+       sk-여기에실제키
+
+주의:
+  · config/openai_key.txt 는 .gitignore 로 제외됨 → 절대 GitHub에 안 올라감.
+  · 컨테이너엔 이미지에 굽지 않고 '마운트'로 전달됨(run 스크립트가 처리).
+  · 키가 유출되면 즉시 platform.openai.com 에서 Revoke 후 재발급.
+  · OpenAI 계정에 하드 스펜딩 캡($5~10) 걸어두길 권장.

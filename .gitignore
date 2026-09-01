@@ -1,0 +1,17 @@
+# ── 절대 커밋 금지: 비밀키 ──────────────────────────────
+openai_key.txt
+config/openai_key.txt
+*.key
+.env
+
+# ── 퍼징 산출물(전량/queue/crash) ────────────────────────
+output/
+*.so
+gen_seeds/
+ldso_output/
+__pycache__/
+*.pyc
+
+# 시드 바이너리는 커밋 유지(seeds/*.elf), 나머지 제외
+!seeds/*.elf
+.omc/
