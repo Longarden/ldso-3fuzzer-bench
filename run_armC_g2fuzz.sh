@@ -36,13 +36,27 @@ export AFL_SKIP_CPUFREQ=1 AFL_NO_AFFINITY=1 AFL_AUTORESUME=1 AFL_SKIP_CRASHES=1 
 export AFL_FORKSRV_INIT_TMOUT=120000   # ★ 부하내성(Arm B와 동일): fork서버 초기화 대기 = 120s 고정
 echo "[armC-g2fuzz] $(date) AFL++ -Q 퍼징 ${SECS}s → $OUT/afl"
 # -t 5000+ : exec 타임아웃 auto-scale(ceiling=5s). 6컨테이너 동시부하로 QEMU startup 지연시에도 안정.
-rc=0
-timeout --signal=SIGINT "$SECS" \
-  ./afl-fuzz -Q -i "$OUT/initial_seeds" -o "$OUT/afl" -m none -t 5000+ -k "$G2" -- "$LD" @@ || rc=$?
-if [ "$rc" = 0 ] || [ "$rc" = 124 ]; then
-  echo "[armC-g2fuzz] 정상 종료 (rc=$rc; 124=6시간 timeout 도달)"
-else
-  echo "[armC-g2fuzz] ★ABORT rc=$rc — afl 비정상 종료. 위 로그(PROGRAM ABORT 등) 확인하라."
-fi
+# ★ 런타임 복원력(Arm B와 동일): 퍼징 도중 fork서버 사망(OOM/ld.so abort)시 AUTORESUME으로
+#   남은 예산까지 자동 재개. 15초내 연속 5회 급사시 재개중단(독성입력/RAM부족 가드).
+END=$(( $(date +%s) + SECS )); fails=0; attempt=0
+while :; do
+  REMAIN=$(( END - $(date +%s) ))
+  [ "$REMAIN" -le 10 ] && { echo "[armC-g2fuzz] 시간예산 소진 → 종료"; break; }
+  attempt=$((attempt+1))
+  [ "$attempt" -gt 1 ] && echo "[armC-g2fuzz] $(date) afl 재개 #$attempt (AUTORESUME · 남은 ${REMAIN}s)"
+  start=$(date +%s); rc=0
+  timeout --signal=SIGINT "$REMAIN" \
+    ./afl-fuzz -Q -i "$OUT/initial_seeds" -o "$OUT/afl" -m none -t 5000+ -k "$G2" -- "$LD" @@ || rc=$?
+  if [ "$rc" = 0 ] || [ "$rc" = 124 ]; then
+    echo "[armC-g2fuzz] 정상 종료 (rc=$rc; 124=시간예산 도달)"; break
+  fi
+  dur=$(( $(date +%s) - start ))
+  echo "[armC-g2fuzz] ★afl 중단 rc=$rc (${dur}s 만에) — fork서버 사망/OOM 의심, 재개 시도"
+  if [ "$dur" -lt 15 ]; then fails=$((fails+1)); else fails=0; fi
+  if [ "$fails" -ge 5 ]; then
+    echo "[armC-g2fuzz] ★★연속 급속중단 5회 — 독성입력/RAM부족 의심. 재개 중단(crashes·로그 확인)"; break
+  fi
+  sleep 2
+done
 
 echo "ARMC_DONE $(date)  결과: $OUT/afl/default/{queue,crashes} + $OUT/ldso_output/default/gen_seeds"

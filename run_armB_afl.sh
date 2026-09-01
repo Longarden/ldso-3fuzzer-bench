@@ -24,14 +24,29 @@ echo "[armB-afl] $(date) AFL++ -Q · seeds=$SEEDS · out=$OUT · ${SECS}s · SUT
 # -Q QEMU · -i 500시드 · -o 마운트 · -m none · @@=변이
 # -t 5000+ : exec 타임아웃을 초기엔 낮게 잡고 '느린 코드 발견시 5000ms까지 자동상향'(auto-scale, ceiling=5s).
 #   ('+'=auto-scale이지 abort회피가 아님. 타임아웃 시드 skip은 -t 값 유무와 무관하게 원래 동작.)
-rc=0
-timeout --signal=SIGINT "$SECS" \
-  "$AFL" -Q -i "$SEEDS" -o "$OUT" -m none -t 5000+ -- "$LD" @@ || rc=$?
-# timeout이 SECS 경과로 종료시키면 rc=124(정상완주). 그 외 비정상 rc는 진짜 abort → 크게 표시(||true로 감추지 않음).
-if [ "$rc" = 0 ] || [ "$rc" = 124 ]; then
-  echo "[armB-afl] 정상 종료 (rc=$rc; 124=6시간 timeout 도달)"
-else
-  echo "[armB-afl] ★ABORT rc=$rc — afl 비정상 종료. 위 로그(PROGRAM ABORT 등) 확인하라."
-fi
+# ★ 런타임 복원력: 퍼징 도중 fork서버가 죽는 경우(악성 ELF가 4GB OOM 유발 또는 ld.so abort가
+#   fork서버 동반사망) afl는 그냥 abort하고 끝난다 → 그 arm 조기종료. AUTORESUME으로 남은 예산까지
+#   자동 재개해 6시간을 채운다(저장된 queue/crashes에서 이어감).
+#   가드: '독성입력'이 재개 직후 또 죽이면 무한루프 → 15초내 연속 5회 급사시 재개중단.
+END=$(( $(date +%s) + SECS )); fails=0; attempt=0
+while :; do
+  REMAIN=$(( END - $(date +%s) ))
+  [ "$REMAIN" -le 10 ] && { echo "[armB-afl] 시간예산 소진 → 종료"; break; }
+  attempt=$((attempt+1))
+  [ "$attempt" -gt 1 ] && echo "[armB-afl] $(date) afl 재개 #$attempt (AUTORESUME · 남은 ${REMAIN}s)"
+  start=$(date +%s); rc=0
+  timeout --signal=SIGINT "$REMAIN" \
+    "$AFL" -Q -i "$SEEDS" -o "$OUT" -m none -t 5000+ -- "$LD" @@ || rc=$?
+  if [ "$rc" = 0 ] || [ "$rc" = 124 ]; then
+    echo "[armB-afl] 정상 종료 (rc=$rc; 124=시간예산 도달)"; break
+  fi
+  dur=$(( $(date +%s) - start ))
+  echo "[armB-afl] ★afl 중단 rc=$rc (${dur}s 만에) — fork서버 사망/OOM 의심, 재개 시도"
+  if [ "$dur" -lt 15 ]; then fails=$((fails+1)); else fails=0; fi
+  if [ "$fails" -ge 5 ]; then
+    echo "[armB-afl] ★★연속 급속중단 5회 — 독성입력/RAM부족 의심. 재개 중단(crashes·로그 확인)"; break
+  fi
+  sleep 2
+done
 
 echo "ARMB_DONE $(date)  결과: $OUT/default/{queue,crashes,hangs}"
