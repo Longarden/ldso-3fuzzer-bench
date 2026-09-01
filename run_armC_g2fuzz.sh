@@ -32,11 +32,17 @@ echo "[armC-g2fuzz] gen_seeds=$NGEN 개"
 if [ "$NGEN" -eq 0 ]; then echo "[armC] gen_seeds 0개 — LLM 생성 실패(모델/키 확인)"; exit 1; fi
 
 # 3) AFL++ -Q 로 ld.so 퍼징 (cmplog -c 제거, -Q QEMU, -k G2FUZZ 통합)
-export AFL_SKIP_CPUFREQ=1 AFL_NO_AFFINITY=1 AFL_SKIP_CRASHES=1 AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1
-export AFL_FORKSRV_INIT_TMOUT=120000   # ★ 부하내성(Arm B와 동일): fork서버 초기화 대기 120s
+export AFL_SKIP_CPUFREQ=1 AFL_NO_AFFINITY=1 AFL_AUTORESUME=1 AFL_SKIP_CRASHES=1 AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1
+export AFL_FORKSRV_INIT_TMOUT=120000   # ★ 부하내성(Arm B와 동일): fork서버 초기화 대기 = 120s 고정
 echo "[armC-g2fuzz] $(date) AFL++ -Q 퍼징 ${SECS}s → $OUT/afl"
-# -t 5000+ ('+'=느린시드는 abort말고 skip) — 6컨테이너 동시부하로 QEMU startup 지연시 간헐 abort 방지
+# -t 5000+ : exec 타임아웃 auto-scale(ceiling=5s). 6컨테이너 동시부하로 QEMU startup 지연시에도 안정.
+rc=0
 timeout --signal=SIGINT "$SECS" \
-  ./afl-fuzz -Q -i "$OUT/initial_seeds" -o "$OUT/afl" -m none -t 5000+ -k "$G2" -- "$LD" @@ || true
+  ./afl-fuzz -Q -i "$OUT/initial_seeds" -o "$OUT/afl" -m none -t 5000+ -k "$G2" -- "$LD" @@ || rc=$?
+if [ "$rc" = 0 ] || [ "$rc" = 124 ]; then
+  echo "[armC-g2fuzz] 정상 종료 (rc=$rc; 124=6시간 timeout 도달)"
+else
+  echo "[armC-g2fuzz] ★ABORT rc=$rc — afl 비정상 종료. 위 로그(PROGRAM ABORT 등) 확인하라."
+fi
 
 echo "ARMC_DONE $(date)  결과: $OUT/afl/default/{queue,crashes} + $OUT/ldso_output/default/gen_seeds"
