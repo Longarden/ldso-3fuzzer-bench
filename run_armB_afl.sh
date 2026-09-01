@@ -16,10 +16,13 @@ export AFL_SKIP_CRASHES=1
 # 호스트 core_pattern 이 '|'(코어덤프핸들러)로 시작하면 AFL 이 abort → 실행 가능하게 fallback.
 #   ★ 크래시 정확도 최상 원하면 호스트에서 한 번: echo core | sudo tee /proc/sys/kernel/core_pattern
 export AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1
+# ★ 부하내성: 6컨테이너 동시기동시 QEMU startup이 느려 fork서버 핸드셰이크/캘리브레이션이
+#   기본 타임아웃을 넘겨 간헐적 abort(→ ||true가 삼켜 "Exited(0)"로 보임)하는 것 방지.
+export AFL_FORKSRV_INIT_TMOUT=120000   # fork서버 초기화 대기 120s (기본 매우짧음)
 
 echo "[armB-afl] $(date) AFL++ -Q · seeds=$SEEDS · out=$OUT · ${SECS}s · SUT=$LD"
-# -Q QEMU · -i 500시드 · -o 마운트 · -m none(QEMU 메모리제한 없음) · -t 2000ms · @@=변이파일
+# -Q QEMU · -i 500시드 · -o 마운트 · -m none · -t 5000+ (5s, '+'=느린시드는 abort말고 skip) · @@=변이
 timeout --signal=SIGINT "$SECS" \
-  "$AFL" -Q -i "$SEEDS" -o "$OUT" -m none -t 2000 -- "$LD" @@ || true
+  "$AFL" -Q -i "$SEEDS" -o "$OUT" -m none -t 5000+ -- "$LD" @@ || true
 
 echo "ARMB_DONE $(date)  결과: $OUT/default/{queue,crashes,hangs}"
