@@ -25,10 +25,14 @@ launch() {   # short_name cpu mode
   local vols=(-v "$OUT/$sn:/output")
   if [ "$mode" = "g2fuzz" ]; then vols+=(-v "$KEY:/secrets/openai_key.txt:ro")
   else vols+=(-v "$SEEDS:/seeds:ro"); fi
-  docker run -d --name "$name" --cpuset-cpus "$cpu" --memory 4g --memory-swap 4g \
+  # ★ RAM: lfuzzer(네이티브·파일쓰기만)=4g면 충분. afl/g2fuzz(-Q QEMU)는 악성ELF가 ld.so 거대매핑→
+  #   OOM으로 fork서버 사망하던 근본원인 대응 → 8g 넉넉히. (--memory-swap=--memory ⇒ swap 0)
+  local mem=4g
+  case "$mode" in afl|g2fuzz) mem=8g;; esac
+  docker run -d --name "$name" --cpuset-cpus "$cpu" --memory "$mem" --memory-swap "$mem" \
     -e PYTHONPATH=/root/lfuzzer -e LFUZZER_HETERO=1 \
     "${vols[@]}" "$IMG" bash -lc "$cmd" >/dev/null \
-    && echo "  기동: $name (cpu=$cpu · 4GB · $mode) → output/$sn"
+    && echo "  기동: $name (cpu=$cpu · ${mem} · $mode) → output/$sn"
 }
 
 echo "[run_all] 기동 (${SECS}s)..."
