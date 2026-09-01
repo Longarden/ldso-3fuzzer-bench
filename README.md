@@ -59,7 +59,7 @@ bash run_all.sh             # 인자 없음 = 21600초 = 6시간
 
 ```
  · 코어 6개 이상  (컨테이너를 cpu 1~6 에 핀. `nproc` 로 확인)
- · RAM ~40GB 이상  (lfuzzer 2×4GB + afl 2×8GB + g2fuzz 2×8GB = 40GB. QEMU arm은 OOM 방지 위해 8GB)
+ · RAM 48GB 이상  (6컨테이너 × 8GB. QEMU arm OOM 방지 위해 전 arm 8GB 통일. swap 0)
  · 디스크 수백 GB (전량저장은 시간당 수 GB)
  · docker 설치 + 실행권한  (없으면 `sudo docker` 로. 확인: `docker run --rm hello-world`)
  · (Arm C 만) OpenAI 유료 API 키  ← 아래 2번에서 넣는 법 설명
