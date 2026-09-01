@@ -5,10 +5,13 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential gcc git python3 python3-pip binutils ca-certificates curl wget \
+        build-essential gcc git python3 python3-pip python-is-python3 binutils ca-certificates curl wget \
         ninja-build meson cmake pkg-config libglib2.0-dev automake libtool bison flex \
         python3-setuptools python3-pip \
     && rm -rf /var/lib/apt/lists/*
+# ↑ python-is-python3: G2FUZZ(func.py validate_status_process)가 생성기를 'python xxx.py'로
+#   실행해 검증한다. Ubuntu24.04엔 python3만 있고 'python'이 없어 FileNotFoundError→gen_seeds 0
+#   ("LLM 생성실패"로 오진)되므로 python→python3 심링크 필수.
 
 WORKDIR /root
 
