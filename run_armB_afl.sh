@@ -28,10 +28,13 @@ echo "[armB-afl] $(date) AFL++ -Q · seeds=$SEEDS · out=$OUT · ${SECS}s · SUT
 #   fork서버 동반사망) afl는 그냥 abort하고 끝난다 → 그 arm 조기종료. AUTORESUME으로 남은 예산까지
 #   자동 재개해 6시간을 채운다(저장된 queue/crashes에서 이어감).
 #   가드: '독성입력'이 재개 직후 또 죽이면 무한루프 → 15초내 연속 5회 급사시 재개중단.
-END=$(( $(date +%s) + SECS )); fails=0; attempt=0
+END=$(( $(date +%s) + SECS )); fails=0; attempt=0; MAXATT=100
 while :; do
   REMAIN=$(( END - $(date +%s) ))
   [ "$REMAIN" -le 10 ] && { echo "[armB-afl] 시간예산 소진 → 종료"; break; }
+  if [ "$attempt" -ge "$MAXATT" ]; then
+    echo "[armB-afl] ★★재개 ${MAXATT}회 도달 — 느린 반복사망(독성입력/RAM) 의심, 재개 중단"; break
+  fi
   attempt=$((attempt+1))
   [ "$attempt" -gt 1 ] && echo "[armB-afl] $(date) afl 재개 #$attempt (AUTORESUME · 남은 ${REMAIN}s)"
   start=$(date +%s); rc=0

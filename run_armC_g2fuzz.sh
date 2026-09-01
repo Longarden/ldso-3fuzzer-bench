@@ -38,10 +38,13 @@ echo "[armC-g2fuzz] $(date) AFL++ -Q 퍼징 ${SECS}s → $OUT/afl"
 # -t 5000+ : exec 타임아웃 auto-scale(ceiling=5s). 6컨테이너 동시부하로 QEMU startup 지연시에도 안정.
 # ★ 런타임 복원력(Arm B와 동일): 퍼징 도중 fork서버 사망(OOM/ld.so abort)시 AUTORESUME으로
 #   남은 예산까지 자동 재개. 15초내 연속 5회 급사시 재개중단(독성입력/RAM부족 가드).
-END=$(( $(date +%s) + SECS )); fails=0; attempt=0
+END=$(( $(date +%s) + SECS )); fails=0; attempt=0; MAXATT=100
 while :; do
   REMAIN=$(( END - $(date +%s) ))
   [ "$REMAIN" -le 10 ] && { echo "[armC-g2fuzz] 시간예산 소진 → 종료"; break; }
+  if [ "$attempt" -ge "$MAXATT" ]; then
+    echo "[armC-g2fuzz] ★★재개 ${MAXATT}회 도달 — 느린 반복사망(독성입력/RAM) 의심, 재개 중단"; break
+  fi
   attempt=$((attempt+1))
   [ "$attempt" -gt 1 ] && echo "[armC-g2fuzz] $(date) afl 재개 #$attempt (AUTORESUME · 남은 ${REMAIN}s)"
   start=$(date +%s); rc=0

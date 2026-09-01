@@ -44,26 +44,37 @@ def main():
     crash_log = open(os.path.join(OUT, "_crashes.csv"), "a", buffering=1)
     mut = SA.StructureAwareMutator(seed=RSEED)
     rng = mut.rng
-    n = 0; crashes = 0; t0 = time.time(); deadline = t0 + SECS
+    n = 0; crashes = 0; errs = 0; t0 = time.time(); deadline = t0 + SECS
     print("[armA-lfuzzer] seeds=%d out=%s secs=%.0f rng=%d(self-random) hetero=%s → 전량저장"
           % (len(seeds), OUT, SECS, RSEED, os.environ.get("LFUZZER_HETERO", "1")), flush=True)
+    # ★ 복원력(B·C 재개루프와 패리티): 한 iteration에서 예외(뮤테이터 버그·일시적 write오류 등)가
+    #   나도 arm 전체가 죽지 않고 다음 iteration으로 넘어가 6시간 예산을 채운다. Lfuzzer는 네이티브
+    #   실행(QEMU 아님)이라 자식 ld.so 크래시는 returncode로 잡히므로, 남는 위험은 iteration 본문 예외뿐.
     while time.time() < deadline:
-        base = seeds[rng.randrange(len(seeds))]        # 500개 중 무작위 시드
-        mutant = mut.fuzz(bytes(base), None, max(len(base) * 2, 4096))
-        n += 1
-        path = os.path.join(OUT, "%09d.so" % n)
-        with open(path, "wb") as f:
-            f.write(bytes(mutant))
-        os.chmod(path, 0o755)
-        rc = run_loader(path)
-        if rc is not None and is_crash(rc):
-            crashes += 1
-            crash_log.write("%09d,%d\n" % (n, rc))
-        if n % 500 == 0:
-            el = time.time() - t0
-            print("  execs=%d crash=%d rate=%.1f/s elapsed=%.0fs"
-                  % (n, crashes, n / max(el, 1e-9), el), flush=True)
+        try:
+            base = seeds[rng.randrange(len(seeds))]        # 500개 중 무작위 시드
+            mutant = mut.fuzz(bytes(base), None, max(len(base) * 2, 4096))
+            n += 1
+            path = os.path.join(OUT, "%09d.so" % n)
+            with open(path, "wb") as f:
+                f.write(bytes(mutant))
+            os.chmod(path, 0o755)
+            rc = run_loader(path)
+            if rc is not None and is_crash(rc):
+                crashes += 1
+                crash_log.write("%09d,%d\n" % (n, rc))
+            if n % 500 == 0:
+                el = time.time() - t0
+                print("  execs=%d crash=%d rate=%.1f/s elapsed=%.0fs"
+                      % (n, crashes, n / max(el, 1e-9), el), flush=True)
+        except Exception as e:
+            errs += 1
+            if errs <= 20:
+                print("  [armA] iter 오류 무시(%d회): %r" % (errs, e), flush=True)
+            continue
     crash_log.close()
+    if errs:
+        print("[armA-lfuzzer] iteration 예외 총 %d회(무시하고 계속함)" % errs, flush=True)
     print("[armA-lfuzzer] done execs=%d crash=%d elapsed=%.0fs → %s"
           % (n, crashes, time.time() - t0, OUT), flush=True)
     print("ARMA_DONE", flush=True)
