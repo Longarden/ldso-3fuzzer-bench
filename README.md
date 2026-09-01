@@ -15,6 +15,46 @@ glibc 동적 링커 `ld.so`(`/lib64/ld-linux-x86-64.so.2`)를 대상으로 **퍼
 
 ---
 
+## ⚡ 빠른 시작 (한눈에 · 이대로 복붙)
+
+```bash
+# ── STEP 0. 이전/스모크 컨테이너 정리 (재실행이면 필수 — 안 하면 run_all.sh가 skip함)
+docker rm -f bench_lfuzzer1 bench_lfuzzer2 bench_afl1 bench_afl2 bench_g2fuzz1 bench_g2fuzz2
+rm -rf output
+
+# ── STEP 1. 레포 (처음이면 clone, 있으면 pull)
+git clone https://github.com/Longarden/ldso-3fuzzer-bench.git   # 처음만
+cd ldso-3fuzzer-bench && git pull
+
+# ── STEP 2. OpenAI 키 (Arm C만 필요 / A·B는 없어도 됨)
+echo 'sk-여기에-네-실제-키' > config/openai_key.txt              # C 안 쓰면 생략
+
+# ── STEP 3. AFL 크래시 정확도 (1회)
+echo core | sudo tee /proc/sys/kernel/core_pattern
+
+# ── STEP 4. 60초 스모크 → 정상이면 6시간 본run
+bash run_all.sh 60          # 첫 실행은 이미지 빌드 20~40분 후 60초 기동
+docker ps                   # bench_ 6개 Up 이면 성공 (아래 주의 참고)
+bash status.sh              # 대시보드
+# 좋으면 본run:
+docker rm -f bench_lfuzzer1 bench_lfuzzer2 bench_afl1 bench_afl2 bench_g2fuzz1 bench_g2fuzz2
+rm -rf output
+bash run_all.sh             # 인자 없음 = 21600초 = 6시간
+```
+> docker에 sudo 필요한 머신이면 위 모든 `docker`/`bash run_all.sh`/`bash status.sh` 앞에 **`sudo`**.
+
+```
+━━ ⚠️ docker ps 가 비어보여도 당황 말 것 (삭제된 게 아님) ━━━━━━━━━━━━━━━━━━
+ · run_all.sh 는 먼저 이미지를 build 한다 → 빌드 중엔 아직 컨테이너가 없어서 docker ps 가 빈다(정상).
+   빌드(20~40분)가 끝나야 docker run 이 돌아 6개가 뜬다.
+ · docker ps        = "지금 실행중"만 표시.  다 끝났거나 죽으면 빈다.
+ · docker ps -a     = 종료된 것까지 전부 표시.  ← 컨테이너 살았나 확인은 이걸로.
+ · 이 레포 스크립트엔 --rm 이 없다 → 컨테이너는 자동삭제 안 됨. 죽어도 Exited 로 남는다.
+   (docker ps 비었는데 ps -a 에 Exited 로 있으면 = 삭제된 게 아니라 crash → docker logs 로 원인)
+```
+
+---
+
 ## 0. 요구 사항 (먼저 확인)
 
 ```
@@ -178,8 +218,8 @@ bash stop_all.sh                # 6개 '중지'만 (컨테이너·출력 모두 
 ```
 ```
  ★ 컨테이너는 자동 삭제하지 않는다(데이터 보호). 재실행하려면 기존 것 직접 제거:
-   docker rm bench_lfuzzer1 bench_lfuzzer2 bench_afl1 bench_afl2 bench_g2fuzz1 bench_g2fuzz2
-   (output/ 은 마운트라 컨테이너 지워도 파일 안전)
+   docker rm -f bench_lfuzzer1 bench_lfuzzer2 bench_afl1 bench_afl2 bench_g2fuzz1 bench_g2fuzz2
+   (-f = 실행중이어도 강제 제거. output/ 은 마운트라 컨테이너 지워도 파일 안전)
 ```
 
 ## 8. 문제 해결 (Troubleshooting)
