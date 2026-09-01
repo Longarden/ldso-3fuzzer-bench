@@ -6,8 +6,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential gcc git python3 python3-pip binutils ca-certificates curl wget \
-        ninja-build cmake pkg-config libglib2.0-dev automake libtool bison flex \
-        python3-setuptools \
+        ninja-build meson cmake pkg-config libglib2.0-dev automake libtool bison flex \
+        python3-setuptools python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /root
@@ -26,8 +26,14 @@ RUN pip3 install --no-cache-dir --break-system-packages openai==1.63.2
 RUN git clone --depth 1 https://github.com/G2FUZZ/G2FUZZ.git /root/G2FUZZ \
     && cd /root/G2FUZZ \
     && rm -rf frida_mode nyx_mode coresight_mode unicorn_mode \
-    && make source-only \
-    && cd qemu_mode && CPU_TARGET=x86_64 ./build_qemu_support.sh
+    && make afl-fuzz afl-showmap \
+    && cd qemu_mode \
+    && git clone https://github.com/AFLplusplus/qemuafl \
+    && CPU_TARGET=x86_64 ./build_qemu_support.sh
+    # ↑ qemuafl 은 full clone(--depth 1 제거) — build_qemu_support.sh 가 QEMUAFL_VERSION(ef1cd9a8cb)
+    #   커밋을 checkout 해야 G2FUZZ import 헤더와 맞음(shallow면 그 커밋 없어 tip→심볼 미정의 컴파일에러).
+    #   G2FUZZ엔 .gitmodules 없어 자동 submodule 실패 → qemuafl 을 직접 clone 해서 우회.
+    #   make afl-fuzz = afl-cc(소스계측) 안 만듦(LLVM/gcc-plugin 불필요). QEMU(-Q)만 씀.
 ENV G2FUZZ_DIR=/root/G2FUZZ AFL_PATH=/root/G2FUZZ AFL_BIN=/root/G2FUZZ/afl-fuzz
 
 # 4) 이 키트 스크립트/설정
